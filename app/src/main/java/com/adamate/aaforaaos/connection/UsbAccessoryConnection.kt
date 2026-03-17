@@ -6,7 +6,7 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-
+import android.os.Build
 import android.os.SystemClock
 import com.adamate.aaforaaos.utils.AppLog
 import kotlinx.coroutines.Dispatchers
@@ -22,8 +22,8 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
     @Volatile private var endpointIn: UsbEndpoint? = null
     @Volatile private var endpointOut: UsbEndpoint? = null
 
-    // Internal buffer — only ever accessed by the poll thread (recvBlocking); no lock needed.
-    private val internalBuffer = ByteArray(16384)
+    // Internal buffer — 32KB for car USB (often higher latency). Only accessed by poll thread.
+    private val internalBuffer = ByteArray(32768)
     private var internalBufferPos = 0
     private var internalBufferAvailable = 0
 
@@ -72,15 +72,19 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
         var connection: UsbDeviceConnection? = null
         var lastError: Throwable? = null
 
-        for (i in 0 until 3) {
+        // Car USB ports can be slow to enumerate; retry with increasing delay
+        for (i in 0 until 5) {
             try {
                 connection = usbMgr.openDevice(device)
                 if (connection != null) break
             } catch (t: Throwable) {
                 lastError = t
-                AppLog.w("Attempt ${i+1} to openDevice failed: ${t.message}")
+                AppLog.w("Attempt ${i+1}/5 to openDevice failed: ${t.message}")
             }
-            if (i < 2) try { Thread.sleep(500) } catch (_: Exception) {}
+            if (i < 4) {
+                val delayMs = 300L + (i * 400L) // 300, 700, 1100, 1500 ms
+                try { Thread.sleep(delayMs) } catch (_: Exception) {}
+            }
         }
 
         usbDeviceConnection = connection ?: throw UsbOpenException(lastError ?: Throwable("openDevice: connection is null"))
@@ -94,7 +98,14 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
                 throw UsbOpenException("No usb interfaces")
             }
             AppLog.i("interfaceCount: $interfaceCount")
-            usbInterface = device.getInterface(0)
+
+            // Find the accessory interface: AOA uses class 0xFF (vendor-specific). Fallback: first
+            // interface with bulk IN+OUT. Some devices (ADB+accessory) have interface 0=accessory, 1=ADB.
+            usbInterface = findAccessoryInterface(device)
+                ?: throw UsbOpenException("No suitable accessory interface (need bulk IN+OUT)")
+
+            val ifaceClass = getInterfaceClassSafe(usbInterface!!)
+            AppLog.i("Using accessory interface (class=${if (ifaceClass >= 0) "0x${Integer.toHexString(ifaceClass)}" else "unknown"})")
 
             if (!usbDeviceConnection!!.claimInterface(usbInterface, true)) {
                 throw UsbOpenException("Error claiming interface")
@@ -103,6 +114,34 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
             AppLog.e(e)
             throw UsbOpenException(e)
         }
+    }
+
+    /** AOA accessory interface is class 0xFF. API 26+ has getInterfaceClass(). */
+    private fun getInterfaceClassSafe(iface: UsbInterface): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) iface.interfaceClass else -1
+
+    /** Find interface with bulk IN and OUT endpoints. Prefer class 0xFF (AOA accessory). */
+    private fun findAccessoryInterface(device: UsbDevice): UsbInterface? {
+        var fallback: UsbInterface? = null
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            var hasIn = false
+            var hasOut = false
+            for (j in 0 until iface.endpointCount) {
+                when (iface.getEndpoint(j).direction) {
+                    UsbConstants.USB_DIR_IN -> hasIn = true
+                    UsbConstants.USB_DIR_OUT -> hasOut = true
+                }
+            }
+            if (hasIn && hasOut) {
+                fallback = iface
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && iface.interfaceClass == 0xFF) {
+                    AppLog.i("Found AOA accessory interface at index $i (class 0xFF)")
+                    return iface
+                }
+            }
+        }
+        return fallback
     }
 
     private fun initEndpoint(): Int {
@@ -250,7 +289,12 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
                     if (consecutiveReadErrors % 10 == 0) {
                         AppLog.w("USB read errors ($consecutiveReadErrors) for ${errorDurationMs / 1000}s — waiting for recovery...")
                     }
-                    if (consecutiveReadErrors >= 5) {
+                    // After 3 consecutive errors, try interface reset — recovers from USB stalls
+                    if (consecutiveReadErrors == 3) {
+                        AppLog.i("USB: attempting interface reset after 3 read errors")
+                        resetInterface()
+                        try { Thread.sleep(100) } catch (_: InterruptedException) {}
+                    } else if (consecutiveReadErrors >= 5) {
                         try { Thread.sleep(200) } catch (_: InterruptedException) {}
                     }
                     return if (totalReturned > 0) totalReturned else -1

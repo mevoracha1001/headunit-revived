@@ -10,24 +10,32 @@ import com.adamate.aaforaaos.utils.AppLog
 class UsbAccessoryMode(private val usbMgr: UsbManager) {
 
     fun connectAndSwitch(device: UsbDevice): Boolean {
-        val connection: UsbDeviceConnection?
-        try {
-            connection = usbMgr.openDevice(device)                 // Open device for connection
-        } catch (e: Throwable) {
-            AppLog.e(e)
-            return false
+        var connection: UsbDeviceConnection? = null
+        var lastError: Throwable? = null
+        for (attempt in 1..3) {
+            try {
+                connection = usbMgr.openDevice(device)
+                if (connection != null) break
+            } catch (e: Throwable) {
+                lastError = e
+                AppLog.w("connectAndSwitch attempt $attempt: ${e.message}")
+            }
+            if (attempt < 3) try { Thread.sleep(400L * attempt) } catch (_: Exception) {}
         }
 
         if (connection == null) {
-            AppLog.e("Cannot open device")
+            lastError?.let { AppLog.e("Cannot open device after 3 attempts", it) }
+                ?: AppLog.e("Cannot open device after 3 attempts")
             return false
         }
 
-        val result = switch(connection)
-        connection.close()
-
-        AppLog.i("Result: $result")
-        return result
+        return try {
+            val result = switch(connection)
+            AppLog.i("connectAndSwitch result: $result")
+            result
+        } finally {
+            connection.close()
+        }
     }
 
     private fun switch(connection: UsbDeviceConnection): Boolean {
@@ -93,7 +101,8 @@ class UsbAccessoryMode(private val usbMgr: UsbManager) {
     }
 
     companion object {
-        private const val USB_TIMEOUT_IN_MS = 100
+        // Car USB needs longer timeout for control transfers
+        private const val USB_TIMEOUT_IN_MS = 500
         private const val MANUFACTURER = "Android"
         private const val MODEL = "Android Auto"
         private const val DESCRIPTION = "Android Auto"//"Android Open Automotive Protocol"
