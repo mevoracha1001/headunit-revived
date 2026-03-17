@@ -12,21 +12,29 @@ import com.adamate.aaforaaos.contract.LocationUpdateIntent
 import com.adamate.aaforaaos.utils.AppLog
 
 class GpsLocation constructor(private val context: Context): LocationListener {
-    private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    private val locationManager: LocationManager? =
+        context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
     private var requested: Boolean = false
 
     @SuppressLint("MissingPermission")
     fun start() {
-        if (requested) {
+        if (requested || locationManager == null) {
+            if (locationManager == null) {
+                AppLog.w("LocationManager unavailable — GPS location disabled")
+            }
             return
         }
         AppLog.i("Request location updates")
-        if (PermissionChecker.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PermissionChecker.PERMISSION_GRANTED
-                && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 0.0f, this)
-            val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            AppLog.i("Last known location:  ${location?.toString() ?: "Unknown"}")
-            requested = true
+        try {
+            if (PermissionChecker.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PermissionChecker.PERMISSION_GRANTED
+                    && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 0.0f, this)
+                val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                AppLog.i("Last known location:  ${location?.toString() ?: "Unknown"}")
+                requested = true
+            }
+        } catch (e: Exception) {
+            AppLog.w("Could not request location updates: ${e.message}")
         }
     }
 
@@ -49,6 +57,6 @@ class GpsLocation constructor(private val context: Context): LocationListener {
     fun stop() {
         AppLog.i("Remove location updates")
         requested = false
-        locationManager.removeUpdates(this)
+        locationManager?.removeUpdates(this)
     }
 }

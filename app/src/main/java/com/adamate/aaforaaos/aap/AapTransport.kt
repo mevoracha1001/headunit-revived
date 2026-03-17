@@ -1,8 +1,6 @@
 package com.adamate.aaforaaos.aap
 
-import android.app.UiModeManager
 import android.content.Context
-import android.content.Context.UI_MODE_SERVICE
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Handler
@@ -93,8 +91,6 @@ class AapTransport(
     private val keyCodes = settings.keyCodes.entries.associateTo(mutableMapOf()) {
         it.value to it.key
     }
-    private val modeManager: UiModeManager =
-        context.getSystemService(UI_MODE_SERVICE) as UiModeManager
     private var connection: AccessoryConnection? = null
     private var aapRead: AapRead? = null
     var isQuittingAllowed: Boolean = false

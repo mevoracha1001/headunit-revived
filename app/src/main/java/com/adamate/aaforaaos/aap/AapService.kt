@@ -71,7 +71,7 @@ class AapService : Service(), UsbReceiver.Listener {
     // SupervisorJob prevents a child coroutine failure from cancelling the whole scope
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private lateinit var uiModeManager: UiModeManager
+    private var uiModeManager: UiModeManager? = null
     private lateinit var usbReceiver: UsbReceiver
     private var nightModeManager: NightModeManager? = null
     private var wifiDirectManager: WifiDirectManager? = null
@@ -186,7 +186,11 @@ class AapService : Service(), UsbReceiver.Listener {
         // This ensures media button routing works even BEFORE an AA connection,
         // which is critical for keymap configuration and early button presses.
         if (mediaSession == null) {
-            setupMediaSession()
+            try {
+                setupMediaSession()
+            } catch (e: Exception) {
+                AppLog.w("Could not setup MediaSession (media routing may be limited): ${e.message}")
+            }
         }
         mediaSession?.isActive = true
         updateMediaSessionState(false) // Set initial PlaybackState so system knows our actions
@@ -197,9 +201,17 @@ class AapService : Service(), UsbReceiver.Listener {
         LogExporter.startCapture(this, LogExporter.LogLevel.DEBUG)
         AppLog.i("Auto-started continuous log capture")
 
-        startService(GpsLocationService.intent(this))
-        wifiDirectManager = WifiDirectManager(this)
-        initWifiMode()
+        try {
+            startService(GpsLocationService.intent(this))
+        } catch (e: Exception) {
+            AppLog.w("Could not start GpsLocationService (location may be unavailable): ${e.message}")
+        }
+        try {
+            wifiDirectManager = WifiDirectManager(this)
+            initWifiMode()
+        } catch (e: Exception) {
+            AppLog.w("Could not init WiFi mode (WiFi P2P may be unavailable): ${e.message}")
+        }
         checkAlreadyConnectedUsb()
         registerNetworkMonitor()
     }
@@ -209,29 +221,50 @@ class AapService : Service(), UsbReceiver.Listener {
      * On AAOS (Android Automotive OS), the device is already in car mode — calling
      * enableCarMode can cause issues, so we skip it. AAOS is detected via
      * PackageManager.FEATURE_AUTOMOTIVE.
+     *
+     * On some car head units, UiModeManager may be null or enableCarMode may throw.
+     * We catch and skip — the app runs fine without car mode; it's optional.
      */
     private fun setupCarMode() {
-        uiModeManager = getSystemService(UI_MODE_SERVICE) as UiModeManager
-        if (AutomotiveUtils.isAutomotiveOs(this)) {
-            AppLog.i("AAOS detected: skipping enableCarMode (device already in car mode)")
-        } else {
-            uiModeManager.enableCarMode(0)
+        try {
+            val manager = getSystemService(UI_MODE_SERVICE)
+            if (manager == null) {
+                AppLog.w("UiModeManager unavailable (null) — skipping car mode")
+                return
+            }
+            uiModeManager = manager as? UiModeManager
+            if (uiModeManager == null) {
+                AppLog.w("UiModeManager cast failed — skipping car mode")
+                return
+            }
+            if (AutomotiveUtils.isAutomotiveOs(this)) {
+                AppLog.i("AAOS detected: skipping enableCarMode (device already in car mode)")
+            } else {
+                uiModeManager!!.enableCarMode(0)
+                AppLog.i("Car mode enabled")
+            }
+        } catch (e: Exception) {
+            AppLog.w("Could not enable car mode (device may not support it): ${e.message}")
         }
     }
 
     /** Initialises [NightModeManager] and forwards night-mode changes to Android Auto via AAP. */
     private fun setupNightMode() {
-        nightModeManager = NightModeManager(this, App.provide(this).settings) { isNight ->
-            AppLog.i("NightMode update: $isNight")
-            commManager.send(NightModeEvent(isNight))
-            // Also notify local components (for AA monochrome filter)
-            val intent = Intent(ACTION_NIGHT_MODE_CHANGED).apply {
-                setPackage(packageName)
-                putExtra("isNight", isNight)
+        try {
+            nightModeManager = NightModeManager(this, App.provide(this).settings) { isNight ->
+                AppLog.i("NightMode update: $isNight")
+                commManager.send(NightModeEvent(isNight))
+                // Also notify local components (for AA monochrome filter)
+                val intent = Intent(ACTION_NIGHT_MODE_CHANGED).apply {
+                    setPackage(packageName)
+                    putExtra("isNight", isNight)
+                }
+                sendBroadcast(intent)
             }
-            sendBroadcast(intent)
+            nightModeManager?.start()
+        } catch (e: Exception) {
+            AppLog.w("Could not init NightModeManager (sensors may be unavailable): ${e.message}")
         }
-        nightModeManager?.start()
     }
 
     /**
@@ -541,7 +574,11 @@ class AapService : Service(), UsbReceiver.Listener {
         unregisterReceiver(usbReceiver)
         try { unregisterReceiver(mediaButtonReceiver) } catch (_: Exception) {}
         if (!AutomotiveUtils.isAutomotiveOs(this)) {
-            uiModeManager.disableCarMode(0)
+            try {
+                uiModeManager?.disableCarMode(0)
+            } catch (e: Exception) {
+                AppLog.w("Could not disable car mode: ${e.message}")
+            }
         }
         serviceScope.cancel()
         LogExporter.stopCapture()

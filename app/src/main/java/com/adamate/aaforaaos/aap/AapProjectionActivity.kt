@@ -55,6 +55,10 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
     private var overlayState = OverlayState.STARTING
     private val watchdogHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var latencyGapRunnable: Runnable? = null
+    private var pendingDisconnectRunnable: Runnable? = null
+
+    /** Grace period (ms) before finishing when Disconnected during startup. Gives USB reconnect time to succeed. */
+    private val disconnectGracePeriodMs = 3500L
 
     private val videoWatchdogRunnable = object : Runnable {
         override fun run() {
@@ -90,6 +94,13 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
             checkAndForceSurface()
         }
     }
+    private fun cancelPendingDisconnect() {
+        pendingDisconnectRunnable?.let {
+            watchdogHandler.removeCallbacks(it)
+            pendingDisconnectRunnable = null
+        }
+    }
+
     private fun checkAndForceSurface() {
         AppLog.i("Watchdog: checkAndForceSurface executing...")
         if (projectionView is TextureView) {
@@ -234,13 +245,40 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
                 commManager.connectionState.collect { state ->
                     when (state) {
                         is CommManager.ConnectionState.Disconnected -> {
-                            if (!state.isClean) {
-                                Toast.makeText(this@AapProjectionActivity, getString(R.string.wifi_disconnect_toast), Toast.LENGTH_LONG).show()
+                            cancelPendingDisconnect()
+                            if (overlayState == OverlayState.STARTING && !state.isUserExit) {
+                                // During startup, USB handshake can fail briefly. AapService schedules
+                                // reconnect after ~2s. Give a grace period so reconnect can succeed
+                                // before we bail to main screen (common with flaky car USB ports).
+                                val overlay = findViewById<View>(R.id.loading_overlay)
+                                val title = findViewById<TextView>(R.id.overlay_text)
+                                val detail = findViewById<TextView>(R.id.overlay_detail)
+                                overlay?.visibility = View.VISIBLE
+                                title?.text = getString(R.string.connection_interrupted)
+                                detail?.text = getString(R.string.connection_interrupted_detail)
+                                detail?.visibility = View.VISIBLE
+                                AppLog.i("Disconnected during startup — waiting ${disconnectGracePeriodMs}ms for reconnect")
+                                pendingDisconnectRunnable = Runnable {
+                                    pendingDisconnectRunnable = null
+                                    if (!commManager.isConnected && !isFinishing) {
+                                        AppLog.w("Reconnect grace period expired, finishing")
+                                        if (!state.isClean) {
+                                            Toast.makeText(this@AapProjectionActivity, getString(R.string.wifi_disconnect_toast), Toast.LENGTH_LONG).show()
+                                        }
+                                        finish()
+                                    }
+                                }
+                                watchdogHandler.postDelayed(pendingDisconnectRunnable!!, disconnectGracePeriodMs)
+                            } else {
+                                if (!state.isClean) {
+                                    Toast.makeText(this@AapProjectionActivity, getString(R.string.wifi_disconnect_toast), Toast.LENGTH_LONG).show()
+                                }
+                                hideReconnectingOverlay()
+                                finish()
                             }
-                            hideReconnectingOverlay()
-                            finish()
                         }
                         is CommManager.ConnectionState.HandshakeComplete -> {
+                            cancelPendingDisconnect()
                             // Handshake done. If the surface is already ready (e.g. reconnect
                             // while the activity is in the foreground), start reading immediately.
                             // If not, onSurfaceChanged() will call startReading() when the surface
@@ -248,6 +286,11 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
                             if (isSurfaceSet) {
                                 commManager.startReading()
                             }
+                        }
+                        is CommManager.ConnectionState.Connected,
+                        is CommManager.ConnectionState.StartingTransport,
+                        is CommManager.ConnectionState.TransportStarted -> {
+                            cancelPendingDisconnect()
                         }
                         else -> {}
                     }
@@ -333,6 +376,7 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
     override fun onPause() {
         AppLog.i("AapProjectionActivity: onPause")
         super.onPause()
+        cancelPendingDisconnect()
         watchdogHandler.removeCallbacks(watchdogRunnable)
         watchdogHandler.removeCallbacks(videoWatchdogRunnable)
         watchdogHandler.removeCallbacks(reconnectingWatchdog)
