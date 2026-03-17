@@ -1,11 +1,13 @@
 package com.adamate.aaforaaos.decoder
 
+import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Build
 import android.view.Surface
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 import com.adamate.aaforaaos.utils.Settings
 import com.adamate.aaforaaos.utils.HeadUnitScreenConfig
 import android.os.SystemClock
@@ -17,7 +19,7 @@ interface VideoDimensionsListener {
     fun onVideoDimensionsChanged(width: Int, height: Int)
 }
 
-class VideoDecoder(private val settings: Settings) {
+class VideoDecoder(private val context: Context, private val settings: Settings) {
     companion object {
         private const val TIMEOUT_US = 10000L
 
@@ -163,7 +165,9 @@ class VideoDecoder(private val settings: Settings) {
                 if (mSurface == null || !mSurface!!.isValid) return
                 if (mWidth == 0 || mHeight == 0) return 
                 
-                start(typeToUse.mimeType, settings.forceSoftwareDecoding || forceSoftware, mWidth, mHeight)
+                // On AAOS (GM cars), prefer software decoder — hardware often fails on restricted MediaCodec
+                val useSoftware = settings.forceSoftwareDecoding || forceSoftware || AutomotiveUtils.isAutomotiveOs(context)
+                start(typeToUse.mimeType, useSoftware, mWidth, mHeight)
             }
 
             if (codec == null) return
@@ -297,60 +301,78 @@ class VideoDecoder(private val settings: Settings) {
     }
 
     private fun start(mimeType: String, forceSoftware: Boolean, width: Int, height: Int) {
-        try {
-            startTime = System.nanoTime()
-            val bestCodec = findBestCodec(mimeType, !forceSoftware)
-                ?: throw IllegalStateException("No decoder available for $mimeType")
-
-            codec = MediaCodec.createByCodecName(bestCodec)
-            codecBufferInfo = MediaCodec.BufferInfo()
-
-            val format = MediaFormat.createVideoFormat(mimeType, width, height)
-            if (sps != null) format.setByteBuffer("csd-0", ByteBuffer.wrap(sps!!))
-            if (pps != null) format.setByteBuffer("csd-1", ByteBuffer.wrap(pps!!))
-            
-            // Reduced max input size to 1MB (was 10MB). 
-            // 1MB is sufficient for 1080p I-Frames and saves memory on older devices.
-            format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1048576)
-
-            if (!mSurface!!.isValid) {
-                throw IllegalStateException("Surface is not valid for codec configuration")
+        val preferHw = !forceSoftware
+        var lastError: Exception? = null
+        
+        // Try hardware first (if allowed), then fallback to software — AAOS/restricted devices often fail on HW
+        for (attemptHw in listOf(preferHw, false).distinct()) {
+            if (attemptHw == false && preferHw) {
+                AppLog.w("VideoDecoder: Retrying with software decoder after hardware failure")
             }
-
-            AppLog.i("Configuring decoder: $bestCodec with surface")
-            codec?.configure(format, mSurface, null, 0)
-            
             try {
-                codec?.setVideoScalingMode(MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT)
-            } catch (e: Exception) {}
+                startTime = System.nanoTime()
+                val bestCodec = findBestCodec(mimeType, attemptHw)
+                    ?: throw IllegalStateException("No decoder available for $mimeType")
 
-            codec?.start()
+                codec = MediaCodec.createByCodecName(bestCodec)
+                codecBufferInfo = MediaCodec.BufferInfo()
+
+                val format = MediaFormat.createVideoFormat(mimeType, width, height)
+                if (sps != null) format.setByteBuffer("csd-0", ByteBuffer.wrap(sps!!))
+                if (pps != null) format.setByteBuffer("csd-1", ByteBuffer.wrap(pps!!))
+                
+                // Reduced max input size to 1MB (was 10MB). 
+                // 1MB is sufficient for 1080p I-Frames and saves memory on older devices.
+                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1048576)
+
+                if (!mSurface!!.isValid) {
+                    throw IllegalStateException("Surface is not valid for codec configuration")
+                }
+
+                AppLog.i("Configuring decoder: $bestCodec with surface (hw=$attemptHw)")
+                codec?.configure(format, mSurface, null, 0)
             
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                @Suppress("DEPRECATION")
-                inputBuffers = codec?.inputBuffers
+                try {
+                    codec?.setVideoScalingMode(MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                } catch (e: Exception) {}
+
+                codec?.start()
+                
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                    @Suppress("DEPRECATION")
+                    inputBuffers = codec?.inputBuffers
+                }
+
+                running = true
+                codecConfigured = true
+
+                outputThread = Thread {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
+                    com.adamate.aaforaaos.utils.LegacyOptimizer.setHighPriority()
+                    outputThreadLoop()
+                }.apply {
+                    name = "VideoDecoder-Output"
+                    start()
+                }
+                
+
+                AppLog.i("Codec initialized: $bestCodec for stream ${width}x${height}")
+                return // Success
+
+            } catch (e: Exception) {
+                lastError = e
+                AppLog.e("Decoder init failed (hw=$attemptHw): ${e.message}", e)
+                try {
+                    codec?.stop()
+                    codec?.release()
+                } catch (_: Exception) {}
+                codec = null
+                if (!attemptHw || !preferHw) break
             }
-
-            running = true
-            codecConfigured = true
-
-            outputThread = Thread {
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
-                com.adamate.aaforaaos.utils.LegacyOptimizer.setHighPriority()
-                outputThreadLoop()
-            }.apply {
-                name = "VideoDecoder-Output"
-                start()
-            }
-            
-
-            AppLog.i("Codec initialized: $bestCodec for stream ${width}x${height}")
-
-        } catch (e: Exception) {
-            AppLog.e("Failed to start decoder", e)
-            codec = null
-            running = false
         }
+        if (lastError != null) AppLog.e("Failed to start decoder after fallback", lastError!!)
+        else AppLog.e("Failed to start decoder after fallback")
+        running = false
     }
 
     private fun feedInputBuffer(buffer: ByteBuffer): Boolean {

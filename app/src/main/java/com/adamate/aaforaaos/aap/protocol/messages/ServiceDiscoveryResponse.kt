@@ -11,6 +11,7 @@ import com.adamate.aaforaaos.aap.protocol.proto.Control
 import com.adamate.aaforaaos.aap.protocol.proto.Media
 import com.adamate.aaforaaos.aap.protocol.proto.Sensors
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 import com.adamate.aaforaaos.utils.HeadUnitScreenConfig
 import com.google.protobuf.Message
 
@@ -46,9 +47,14 @@ class ServiceDiscoveryResponse(private val context: Context)
             val video = Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_VID
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also { mediaSinkServiceBuilder ->
-                    val codecToRequest = when (settings.videoCodec) {
-                        "H.265" -> Media.MediaCodecType.MEDIA_CODEC_VIDEO_H265
-                        "Auto" -> if (com.adamate.aaforaaos.decoder.VideoDecoder.isHevcSupported()) {
+                    // On AAOS (GM cars, etc.), force H.264 — H.265 often fails on restricted Android Auto
+                    val codecToRequest = when {
+                        AutomotiveUtils.isAutomotiveOs(context) -> {
+                            AppLog.i("[ServiceDiscovery] AAOS: forcing H.264 for GM/restricted compatibility")
+                            Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP
+                        }
+                        settings.videoCodec == "H.265" -> Media.MediaCodecType.MEDIA_CODEC_VIDEO_H265
+                        settings.videoCodec == "Auto" -> if (com.adamate.aaforaaos.decoder.VideoDecoder.isHevcSupported()) {
                             Media.MediaCodecType.MEDIA_CODEC_VIDEO_H265
                         } else {
                             Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP
@@ -61,8 +67,10 @@ class ServiceDiscoveryResponse(private val context: Context)
                     val phoneWidthMargin = HeadUnitScreenConfig.getWidthMargin()
                     val phoneHeightMargin = HeadUnitScreenConfig.getHeightMargin()
 
-                    // Enforce H.265 for 1440p resolution as required by Android Auto
-                    val effectiveCodec = if (negotiatedResolution == Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._2560x1440 ||
+                    // Enforce H.265 for 1440p resolution as required by Android Auto (skip on AAOS — we cap at 720p)
+                    val effectiveCodec = if (AutomotiveUtils.isAutomotiveOs(context)) {
+                        Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP
+                    } else if (negotiatedResolution == Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._2560x1440 ||
                         negotiatedResolution == Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1440x2560) {
                         AppLog.i("Resolution is 1440p -> Enforcing H.265 codec")
                         Media.MediaCodecType.MEDIA_CODEC_VIDEO_H265
@@ -77,9 +85,11 @@ class ServiceDiscoveryResponse(private val context: Context)
                     AppLog.i("[ServiceDiscovery] NegotiatedResolution is: ${HeadUnitScreenConfig.getNegotiatedWidth()}x${HeadUnitScreenConfig.getNegotiatedHeight()}")
                     AppLog.i("[ServiceDiscovery] Margins are: ${phoneWidthMargin}x${phoneHeightMargin}")
 
+                    // On AAOS, use 30fps for stability on restricted devices
+                    val fpsForConfig = if (AutomotiveUtils.isAutomotiveOs(context)) 30 else settings.fpsLimit
                     mediaSinkServiceBuilder.addVideoConfigs(Control.Service.MediaSinkService.VideoConfiguration.newBuilder().apply {
                         codecResolution = negotiatedResolution
-                        frameRate = when (settings.fpsLimit) {
+                        frameRate = when (fpsForConfig) {
                             30 -> Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._30
                             else -> Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._60
                         }

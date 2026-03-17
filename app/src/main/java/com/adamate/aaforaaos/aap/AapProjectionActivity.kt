@@ -302,8 +302,18 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
 
         val container = findViewById<android.widget.FrameLayout>(R.id.container)
         val displayMetrics = resources.displayMetrics
+        // Init early so HeadUnitScreenConfig.isAaos is set for view selection
+        HeadUnitScreenConfig.init(this, displayMetrics, settings)
 
-        if (settings.viewMode == Settings.ViewMode.TEXTURE) {
+        // On AAOS (GM cars), SurfaceView is most reliable — TextureView/GL often fail on restricted devices
+        val effectiveViewMode = if (HeadUnitScreenConfig.isAaos && settings.viewMode != Settings.ViewMode.SURFACE) {
+            AppLog.i("AAOS: overriding view mode to SurfaceView for compatibility")
+            Settings.ViewMode.SURFACE
+        } else {
+            settings.viewMode
+        }
+
+        if (effectiveViewMode == Settings.ViewMode.TEXTURE) {
             AppLog.i("Using TextureView")
             val textureView = TextureProjectionView(this)
             textureView.layoutParams = FrameLayout.LayoutParams(
@@ -312,7 +322,7 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
             )
             projectionView = textureView
             container.setBackgroundColor(android.graphics.Color.BLACK)
-        } else if (settings.viewMode == Settings.ViewMode.GLES) {
+        } else if (effectiveViewMode == Settings.ViewMode.GLES) {
             AppLog.i("Using GlProjectionView")
             val glView = com.adamate.aaforaaos.view.GlProjectionView(this)
             glView.layoutParams = FrameLayout.LayoutParams(
@@ -329,8 +339,6 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         }
-        // Use the same screen conf for both views for negotiation
-        HeadUnitScreenConfig.init(this, displayMetrics, settings)
 
         val view = projectionView as android.view.View
         container.addView(view)

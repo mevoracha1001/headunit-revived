@@ -11,7 +11,7 @@ import com.adamate.aaforaaos.utils.Settings
 class AppComponent(private val app: App) {
 
     val settings = Settings(app)
-    val videoDecoder = VideoDecoder(settings)
+    val videoDecoder = VideoDecoder(app, settings)
     val audioDecoder = AudioDecoder()
 
     val notificationManager: NotificationManager
