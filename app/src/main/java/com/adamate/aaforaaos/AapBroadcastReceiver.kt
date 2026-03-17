@@ -1,0 +1,60 @@
+package com.adamate.aaforaaos
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.content.IntentFilter
+import android.view.KeyEvent
+import com.adamate.aaforaaos.aap.AapProjectionActivity
+import com.adamate.aaforaaos.aap.protocol.messages.LocationUpdateEvent
+import com.adamate.aaforaaos.connection.CommManager
+import com.adamate.aaforaaos.contract.KeyIntent
+import com.adamate.aaforaaos.contract.LocationUpdateIntent
+import com.adamate.aaforaaos.contract.MediaKeyIntent
+import com.adamate.aaforaaos.contract.ProjectionActivityRequest
+
+class AapBroadcastReceiver : BroadcastReceiver() {
+
+    companion object {
+        val filter: IntentFilter by lazy {
+            val filter = IntentFilter()
+            filter.addAction(LocationUpdateIntent.action)
+            filter.addAction(MediaKeyIntent.action)
+            filter.addAction(ProjectionActivityRequest.action)
+            filter
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        val component = App.provide(context)
+        if (intent.action == LocationUpdateIntent.action) {
+            val location = LocationUpdateIntent.extractLocation(intent)
+            if (component.settings.useGpsForNavigation) {
+                component.commManager.send(LocationUpdateEvent(location))
+            }
+
+            if (location.latitude != 0.0 && location.longitude != 0.0) {
+                component.settings.lastKnownLocation = location
+            }
+        } else if (intent.action == MediaKeyIntent.action) {
+            val event: KeyEvent? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(KeyIntent.extraEvent, KeyEvent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(KeyIntent.extraEvent)
+            }
+            event?.let {
+                component.commManager.send(it.keyCode, it.action == KeyEvent.ACTION_DOWN)
+            }
+        } else if (intent.action == ProjectionActivityRequest.action){
+            if (component.commManager.connectionState.value is CommManager.ConnectionState.TransportStarted) {
+                val aapIntent = Intent(context, AapProjectionActivity::class.java)
+                aapIntent.putExtra(AapProjectionActivity.EXTRA_FOCUS, true)
+                aapIntent.flags = FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(aapIntent)
+            }
+        }
+    }
+}
+

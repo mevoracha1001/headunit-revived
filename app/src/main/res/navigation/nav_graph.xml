@@ -6,7 +6,7 @@
 
     <fragment
         android:id="@+id/homeFragment"
-        android:name="com.andrerinas.headunitrevived.main.HomeFragment"
+        android:name="com.adamate.aaforaaos.main.HomeFragment"
         android:label="@string/app_name">
         <action
             android:id="@+id/action_homeFragment_to_usbListFragment"
@@ -26,7 +26,7 @@
 
     <fragment
         android:id="@+id/settingsFragment"
-        android:name="com.andrerinas.headunitrevived.main.SettingsFragment"
+        android:name="com.adamate.aaforaaos.main.SettingsFragment"
         android:label="@string/settings">
         <action
             android:id="@+id/action_settingsFragment_to_keymapFragment"
@@ -60,32 +60,32 @@
 
     <fragment
         android:id="@+id/keymapFragment"
-        android:name="com.andrerinas.headunitrevived.main.KeymapFragment"
+        android:name="com.adamate.aaforaaos.main.KeymapFragment"
         android:label="@string/keymap" />
 
     <fragment
         android:id="@+id/aboutFragment"
-        android:name="com.andrerinas.headunitrevived.main.AboutFragment"
+        android:name="com.adamate.aaforaaos.main.AboutFragment"
         android:label="@string/about" />
 
     <fragment
         android:id="@+id/autoConnectFragment"
-        android:name="com.andrerinas.headunitrevived.main.AutoConnectFragment"
+        android:name="com.adamate.aaforaaos.main.AutoConnectFragment"
         android:label="@string/auto_connect_settings" />
 
     <fragment
         android:id="@+id/darkModeFragment"
-        android:name="com.andrerinas.headunitrevived.main.DarkModeFragment"
+        android:name="com.adamate.aaforaaos.main.DarkModeFragment"
         android:label="@string/dark_mode_settings" />
 
     <fragment
         android:id="@+id/usbListFragment"
-        android:name="com.andrerinas.headunitrevived.main.UsbListFragment"
+        android:name="com.adamate.aaforaaos.main.UsbListFragment"
         android:label="@string/usb" />
 
     <fragment
         android:id="@+id/networkListFragment"
-        android:name="com.andrerinas.headunitrevived.main.NetworkListFragment"
+        android:name="com.adamate.aaforaaos.main.NetworkListFragment"
         android:label="@string/wifi" />
 
 </navigation>

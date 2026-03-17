@@ -282,6 +282,7 @@
     <string name="success">Success</string>
     <string name="failed">Failed</string>
     <string name="failed_start_android_auto">Failed to start Android Auto</string>
+    <string name="self_mode_no_aa_fallback">Android Auto app not found (no GMS). Server running. Connection info copied: %1$s. Use Wireless Helper on a phone, or enter this IP in Android Auto developer settings.</string>
     <string name="android_auto_starting">Android Auto is starting…</string>
     <string name="connection_interrupted">Connection lost</string>
     <string name="connection_interrupted_detail">Retrying…</string>
@@ -345,5 +346,7 @@
     <string name="nav_action_destination">Arrival</string>
     <string name="show_fps_counter">Show FPS Counter</string>
     <string name="show_fps_counter_description">Display a real-time FPS overlay in the top-left corner during projection.</string>
+    <string name="show_latency_diagnostics">Show Latency Diagnostics</string>
+    <string name="show_latency_diagnostics_description">Display FPS and frame gap (ms since last frame) overlay for latency tuning. Target &lt;150ms end-to-end.</string>
 </resources>
 

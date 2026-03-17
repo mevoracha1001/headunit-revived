@@ -1,0 +1,100 @@
+package com.adamate.aaforaaos.aap
+
+import com.adamate.aaforaaos.aap.protocol.Channel
+import com.adamate.aaforaaos.aap.protocol.messages.Messages
+import com.adamate.aaforaaos.connection.AccessoryConnection
+import com.adamate.aaforaaos.utils.AppLog
+import java.nio.BufferUnderflowException
+import java.nio.ByteBuffer
+
+internal class AapReadMultipleMessages(
+        connection: AccessoryConnection,
+        ssl: AapSsl,
+        handler: AapMessageHandler)
+    : AapRead.Base(connection, ssl, handler) {
+
+    private val fifo = ByteBuffer.allocate(Messages.DEF_BUFFER_LENGTH * 4) // Increased buffer size
+    private val recvBuffer = ByteArray(Messages.DEF_BUFFER_LENGTH)
+    private val recvHeader = AapMessageIncoming.EncryptedHeader()
+    private val msgBuffer = ByteArray(65535) // unsigned short max
+    private val skipBuffer = ByteArray(4)
+
+    override fun doRead(connection: AccessoryConnection): Int {
+        val size = try {
+            connection.recvBlocking(recvBuffer, recvBuffer.size, 150, false)
+        } catch (e: Exception) {
+            AppLog.e("AapRead: Fatal USB read error: ${e.message}")
+            return -1
+        }
+
+        if (size < 0) {
+            // USB read failure — discard any partial data accumulated in the FIFO
+            // so the parser re-syncs cleanly on the next successful read.
+            fifo.clear()
+            // If the connection is dead (e.g. resetInterface failed to re-claim),
+            // signal the transport to quit instead of spinning on a broken connection.
+            if (!connection.isConnected) {
+                AppLog.e("AapRead: Connection lost. Stopping read loop.")
+                return -1
+            }
+            return 0
+        }
+        if (size == 0) return 0
+
+        try {
+            if (fifo.remaining() < size) {
+                AppLog.w("AapRead: FIFO overflow risk. Clearing buffer to recover. Lost ${fifo.position()} bytes.")
+                fifo.clear()
+            }
+            fifo.put(recvBuffer, 0, size)
+            processBulk()
+        } catch (e: Exception) {
+            AppLog.e("AapRead: Error in processBulk: ${e.message}")
+            fifo.clear() // Hard reset on error
+        }
+        return 0
+    }
+
+    private fun processBulk() {
+        fifo.flip()
+
+        while (fifo.remaining() >= AapMessageIncoming.EncryptedHeader.SIZE) {
+            fifo.mark()
+            fifo.get(recvHeader.buf, 0, recvHeader.buf.size)
+            recvHeader.decode()
+
+            if (recvHeader.flags == 0x09) {
+                if (fifo.remaining() < 4) {
+                    fifo.reset()
+                    break
+                }
+                fifo.get(skipBuffer, 0, 4)
+            }
+
+            if (recvHeader.enc_len > msgBuffer.size || recvHeader.enc_len < 0) {
+                AppLog.e("AapRead: Invalid message length (${recvHeader.enc_len}). Resetting FIFO.")
+                fifo.clear()
+                return 
+            }
+
+            if (fifo.remaining() < recvHeader.enc_len) {
+                fifo.reset()
+                break
+            }
+
+            fifo.get(msgBuffer, 0, recvHeader.enc_len)
+
+            try {
+                val msg = AapMessageIncoming.decrypt(recvHeader, 0, msgBuffer, ssl)
+
+                if (msg != null) {
+                    handler.handle(msg)
+                }
+            } catch (e: Exception) {
+                AppLog.e("AapRead: Decryption/Handling error: ${e.message}")
+            }
+        }
+
+        fifo.compact()
+    }
+}

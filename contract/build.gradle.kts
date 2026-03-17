@@ -8,7 +8,7 @@ plugins {
 
 android {
     compileSdk = 34
-    namespace = "com.andrerinas.headunitrevived.contract"
+    namespace = "com.adamate.aaforaaos.contract"
 
     defaultConfig {
         minSdk = 16

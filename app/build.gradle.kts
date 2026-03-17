@@ -12,6 +12,8 @@ plugins {
 dependencies {
     // Conscrypt
     implementation("org.conscrypt:conscrypt-android:2.5.3")
+    // JmDNS: in-app mDNS (no NsdManager/GMS dependency)
+    implementation("org.jmdns:jmdns:3.6.3")
 
     implementation("com.google.protobuf:protobuf-java:3.25.1")
     implementation("androidx.activity:activity-ktx:1.8.2")
@@ -45,7 +47,7 @@ dependencies {
 android {
     compileSdk = 36
     ndkVersion = "27.0.12077973"
-    namespace = "com.andrerinas.headunitrevived"
+    namespace = "com.adamate.aaforaaos"
 
     buildFeatures {
         buildConfig = true
@@ -92,7 +94,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.andrerinas.headunitrevived"
+        applicationId = "com.adamate.aaforaaos"
         minSdk = 16
 //        minSdk = 21 // 21 only for google play console. App should work in minSDK 16
         targetSdk = 36
