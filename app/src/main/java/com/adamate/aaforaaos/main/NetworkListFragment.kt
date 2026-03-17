@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -43,9 +44,7 @@ class NetworkListFragment : Fragment(), NetworkDiscovery.Listener {
     private lateinit var toolbar: MaterialToolbar
     private lateinit var networkDiscovery: NetworkDiscovery
 
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null 
-    private val ADD_ITEM_ID = 1002
-    private val SCAN_ITEM_ID = 1003
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var scanDialog: androidx.appcompat.app.AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,23 +98,32 @@ class NetworkListFragment : Fragment(), NetworkDiscovery.Listener {
     }
     
     private fun setupToolbarMenu() {
-        // Scan Button (Custom Layout)
-        val scanItem = toolbar.menu.add(0, SCAN_ITEM_ID, 0, getString(R.string.scan))
-        scanItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-        scanItem.setActionView(R.layout.layout_scan_button)
-        
-        val scanButton = scanItem.actionView?.findViewById<MaterialButton>(R.id.scan_button_widget)
-        scanButton?.setOnClickListener {
+        val marginStart = resources.getDimensionPixelSize(R.dimen.default_horizontal_margin)
+
+        val scanView = LayoutInflater.from(requireContext()).inflate(R.layout.layout_scan_button, toolbar, false)
+        val scanLp = androidx.appcompat.widget.Toolbar.LayoutParams(
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setMargins(marginStart, 0, 0, 0)
+        }
+        toolbar.addView(scanView, 1, scanLp)
+        scanView.findViewById<MaterialButton>(R.id.scan_button_widget).setOnClickListener {
             startScan()
         }
 
-        // Add Button (Custom Layout)
-        val addItem = toolbar.menu.add(0, ADD_ITEM_ID, 0, getString(R.string.add_new))
-        addItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-        addItem.setActionView(R.layout.layout_add_button)
-        
-        val addButton = addItem.actionView?.findViewById<MaterialButton>(R.id.add_button_widget)
-        addButton?.setOnClickListener {
+        val addView = LayoutInflater.from(requireContext()).inflate(R.layout.layout_add_button, toolbar, false)
+        val addSpacing = resources.getDimensionPixelSize(R.dimen.toolbar_button_spacing)
+        val addLp = androidx.appcompat.widget.Toolbar.LayoutParams(
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setMargins(addSpacing, 0, 0, 0)
+        }
+        toolbar.addView(addView, 2, addLp)
+        addView.findViewById<MaterialButton>(R.id.add_button_widget).setOnClickListener {
             showAddAddressDialog()
         }
     }

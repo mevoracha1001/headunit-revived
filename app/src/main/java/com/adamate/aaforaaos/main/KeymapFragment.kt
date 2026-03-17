@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -32,7 +33,6 @@ class KeymapFragment : Fragment(), MainActivity.KeyListener {
     private lateinit var keypressDebuggerTextView: TextView
     private lateinit var adapter: KeymapAdapter
     private lateinit var settings: Settings
-    private val RESET_ITEM_ID = 1003
 
     private var assignTargetCode = KeyEvent.KEYCODE_UNKNOWN
     private var assignDialog: androidx.appcompat.app.AlertDialog? = null
@@ -93,13 +93,20 @@ class KeymapFragment : Fragment(), MainActivity.KeyListener {
         toolbar.setNavigationOnClickListener {
             findNavController().popBackStack()
         }
-        
-        val resetItem = toolbar.menu.add(0, RESET_ITEM_ID, 0, getString(R.string.reset))
-        resetItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-        resetItem.setActionView(R.layout.layout_reset_button)
-        
-        val resetButton = resetItem.actionView?.findViewById<MaterialButton>(R.id.reset_button_widget)
-        resetButton?.setOnClickListener {
+
+        val actionView = LayoutInflater.from(requireContext()).inflate(R.layout.layout_reset_button, toolbar, false)
+        val margin = resources.getDimensionPixelSize(R.dimen.default_horizontal_margin)
+        val lp = androidx.appcompat.widget.Toolbar.LayoutParams(
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setMargins(margin, 0, 0, 0)
+        }
+        toolbar.addView(actionView, 1, lp)
+
+        val resetButton = actionView.findViewById<MaterialButton>(R.id.reset_button_widget)
+        resetButton.setOnClickListener {
             settings.keyCodes = mutableMapOf()
             adapter.updateCodes(settings.keyCodes)
             Toast.makeText(requireContext(), getString(R.string.key_mappings_reset), Toast.LENGTH_SHORT).show()

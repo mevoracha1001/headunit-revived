@@ -5,6 +5,7 @@ import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -75,7 +76,6 @@ class DarkModeFragment : Fragment(), SensorEventListener {
 
     private var requiresRestart = false
     private var hasChanges = false
-    private val SAVE_ITEM_ID = 1001
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_dark_mode, container, false)
@@ -141,11 +141,18 @@ class DarkModeFragment : Fragment(), SensorEventListener {
             handleBackPress()
         }
 
-        val saveItem = toolbar.menu.add(0, SAVE_ITEM_ID, 0, getString(R.string.save))
-        saveItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-        saveItem.setActionView(R.layout.layout_save_button)
+        val actionView = LayoutInflater.from(requireContext()).inflate(R.layout.layout_save_button, toolbar, false)
+        val margin = resources.getDimensionPixelSize(R.dimen.default_horizontal_margin)
+        val lp = androidx.appcompat.widget.Toolbar.LayoutParams(
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
+            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setMargins(margin, 0, 0, 0)
+        }
+        toolbar.addView(actionView, 1, lp)
 
-        saveButton = saveItem.actionView?.findViewById(R.id.save_button_widget)
+        saveButton = actionView.findViewById(R.id.save_button_widget)
         saveButton?.setOnClickListener {
             saveSettings()
         }
