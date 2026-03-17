@@ -11,7 +11,7 @@ android {
     namespace = "com.adamate.aaforaaos.contract"
 
     defaultConfig {
-        minSdk = 16
+        minSdk = 21
         targetSdk = 34
     }
 

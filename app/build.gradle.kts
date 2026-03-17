@@ -95,8 +95,7 @@ android {
 
     defaultConfig {
         applicationId = "com.adamate.aaforaaos"
-        minSdk = 16
-//        minSdk = 21 // 21 only for google play console. App should work in minSDK 16
+        minSdk = 21  // Required by Play Store; app supports Android 5.0+
         targetSdk = 36
         versionCode = 52
         versionName = "2.0.2-beta2"
