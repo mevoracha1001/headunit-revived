@@ -1,12 +1,18 @@
 package com.adamate.aaforaaos.utils
 
+import android.content.Context
 import android.content.Intent
 import android.util.Log
-
+import androidx.core.app.NotificationCompat
+import com.adamate.aaforaaos.App
+import com.adamate.aaforaaos.R
 import java.util.IllegalFormatException
 import java.util.Locale
 
 object AppLog {
+
+    const val ERROR_CHANNEL_ID = "headunit_errors"
+    private const val ERROR_NOTIFICATION_ID = 0xE11E
 
     interface Logger {
         fun println(priority: Int, tag: String, msg: String)
@@ -24,9 +30,11 @@ object AppLog {
         }
     }
 
+    private var appContext: Context? = null
     private var settings: Settings? = null
 
-    fun init(settings: Settings) {
+    fun init(context: Context, settings: Settings) {
+        this.appContext = context.applicationContext
         this.settings = settings
     }
 
@@ -91,7 +99,34 @@ object AppLog {
 
     private fun loge(message: String, tr: Throwable?) {
         val trace = if (LOGGER is Logger.Android) Log.getStackTraceString(tr) else ""
-        LOGGER.println(Log.ERROR, TAG, message + '\n' + trace)
+        val fullMsg = message + if (trace.isNotEmpty()) "\n$trace" else ""
+        LOGGER.println(Log.ERROR, TAG, fullMsg)
+
+        if (settings?.showErrorNotifications == true) {
+            showErrorNotification(message, tr)
+        }
+    }
+
+    private fun showErrorNotification(message: String, tr: Throwable?) {
+        val ctx = appContext ?: return
+        val displayMsg = buildString {
+            append(message.take(200))
+            if (message.length > 200) append("…")
+            tr?.message?.let { append("\n").append(it.take(100)) }
+        }
+        try {
+            val notification = NotificationCompat.Builder(ctx, ERROR_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_aa)
+                .setContentTitle(ctx.getString(R.string.error_notification_title))
+                .setContentText(displayMsg)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(displayMsg))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+            App.provide(ctx).notificationManager.notify(ERROR_NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show error notification", e)
+        }
     }
 
 

@@ -79,6 +79,7 @@ class SettingsFragment : Fragment() {
     private var pendingAutoStartOnUsb: Boolean? = null
     private var pendingShowFpsCounter: Boolean? = null
     private var pendingShowLatencyDiagnostics: Boolean? = null
+    private var pendingShowErrorNotifications: Boolean? = null
     private var pendingScreenOrientation: Settings.ScreenOrientation? = null
     private var pendingAppLanguage: String? = null
     // Custom Insets
@@ -126,6 +127,7 @@ class SettingsFragment : Fragment() {
         pendingAutoStartOnUsb = settings.autoStartOnUsb
         pendingShowFpsCounter = settings.showFpsCounter
         pendingShowLatencyDiagnostics = settings.showLatencyDiagnostics
+        pendingShowErrorNotifications = settings.showErrorNotifications
         pendingScreenOrientation = settings.screenOrientation
         pendingAppLanguage = settings.appLanguage
         
@@ -247,6 +249,7 @@ class SettingsFragment : Fragment() {
         pendingAutoStartOnUsb?.let { settings.autoStartOnUsb = it }
         pendingShowFpsCounter?.let { settings.showFpsCounter = it }
         pendingShowLatencyDiagnostics?.let { settings.showLatencyDiagnostics = it }
+        pendingShowErrorNotifications?.let { settings.showErrorNotifications = it }
         pendingScreenOrientation?.let { settings.screenOrientation = it }
 
         pendingMediaVolumeOffset?.let { settings.mediaVolumeOffset = it }
@@ -331,6 +334,7 @@ class SettingsFragment : Fragment() {
                         pendingAutoStartOnUsb != settings.autoStartOnUsb ||
                         pendingShowFpsCounter != settings.showFpsCounter ||
                         pendingShowLatencyDiagnostics != settings.showLatencyDiagnostics ||
+                        pendingShowErrorNotifications != settings.showErrorNotifications ||
                         pendingScreenOrientation != settings.screenOrientation ||
                         pendingAppLanguage != settings.appLanguage ||
                         pendingInsetLeft != settings.insetLeft ||
@@ -808,6 +812,18 @@ class SettingsFragment : Fragment() {
             isChecked = pendingShowLatencyDiagnostics ?: false,
             onCheckedChanged = { isChecked ->
                 pendingShowLatencyDiagnostics = isChecked
+                checkChanges()
+                updateSettingsList()
+            }
+        ))
+
+        items.add(SettingItem.ToggleSettingEntry(
+            stableId = "showErrorNotifications",
+            nameResId = R.string.show_error_notifications,
+            descriptionResId = R.string.show_error_notifications_description,
+            isChecked = pendingShowErrorNotifications ?: true,
+            onCheckedChanged = { isChecked ->
+                pendingShowErrorNotifications = isChecked
                 checkChanges()
                 updateSettingsList()
             }

@@ -34,7 +34,7 @@ class App : Application() {
         }
 
         val settings = Settings(this) // Create a Settings instance
-        AppLog.init(settings) // Initialize AppLog with settings for conditional logging
+        AppLog.init(this, settings) // Initialize AppLog with settings for conditional logging
 
         // Apply app theme
         if (AppThemeManager.isStaticMode(settings.appTheme)) {
@@ -66,6 +66,11 @@ class App : Application() {
             mediaChannel.setSound(null, null)
             mediaChannel.setShowBadge(false)
             component.notificationManager.createNotificationChannel(mediaChannel)
+
+            val errorChannel = NotificationChannel(AppLog.ERROR_CHANNEL_ID, "Errors", NotificationManager.IMPORTANCE_HIGH)
+            errorChannel.description = "Shows app errors when log files are not accessible"
+            errorChannel.setShowBadge(true)
+            component.notificationManager.createNotificationChannel(errorChannel)
 
             AapNavigation.createNotificationChannel(this)
         }

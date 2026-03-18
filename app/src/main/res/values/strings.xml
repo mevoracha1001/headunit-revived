@@ -58,6 +58,7 @@
 
     <string name="reconnection_required_title">Reconnection Required</string>
     <string name="reconnection_required_message">The device is in a waiting state. Please unplug and re-plug the USB cable to start Android Auto again.</string>
+    <string name="error_notification_title">Headunit Error</string>
 
     <string name="bluetooth_address_s">Bluetooth address</string>
     <string name="enter_bluetooth_mac">Enter bluetooth MAC</string>
@@ -348,5 +349,7 @@
     <string name="show_fps_counter_description">Display a real-time FPS overlay in the top-left corner during projection.</string>
     <string name="show_latency_diagnostics">Show Latency Diagnostics</string>
     <string name="show_latency_diagnostics_description">Display FPS and frame gap (ms since last frame) overlay for latency tuning. Target &lt;150ms end-to-end.</string>
+    <string name="show_error_notifications">Show Error Notifications</string>
+    <string name="show_error_notifications_description">Display errors as notifications when they occur. Useful when log files are not accessible (e.g. in car).</string>
 </resources>
 

@@ -416,6 +416,13 @@ class Settings(context: Context) {
             prefs.edit().putBoolean("show-latency-diagnostics", value).apply()
         }
 
+    /** When true, errors are shown as notifications (useful when log files are not accessible, e.g. in car). */
+    var showErrorNotifications: Boolean
+        get() = prefs.getBoolean("show-error-notifications", true)
+        set(value) {
+            prefs.edit().putBoolean("show-error-notifications", value).apply()
+        }
+
     companion object {
         const val CONNECTION_TYPE_WIFI = "wifi"
         const val CONNECTION_TYPE_USB = "usb"
