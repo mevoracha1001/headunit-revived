@@ -201,10 +201,6 @@ class UsbAccessoryConnection(
     }
 
     override fun disconnect() {
-        // close() is thread-safe and immediately aborts any in-flight bulkTransfer(),
-        // so both sendBlocking and recvBlocking unblock within milliseconds.
-        usbDeviceConnection?.close()
-
         synchronized(sStateLock) {
             if (usbDeviceConnected != null) {
                 AppLog.i(usbDeviceConnected!!.toString())
@@ -212,18 +208,21 @@ class UsbAccessoryConnection(
             endpointIn = null
             endpointOut = null
 
-            if (usbDeviceConnection != null) {
-                var bret = false
-                if (usbInterface != null) {
-                    // releaseInterface() may fail since close() was already called; log and continue.
-                    bret = try { usbDeviceConnection!!.releaseInterface(usbInterface) } catch (_: Exception) { false }
+            if (usbDeviceConnection != null && usbInterface != null) {
+                val released = try {
+                    usbDeviceConnection!!.releaseInterface(usbInterface)
+                } catch (e: Exception) {
+                    AppLog.e("Error releaseInterface(): ${e.message}")
+                    false
                 }
-                if (bret) {
-                    AppLog.i("OK releaseInterface()")
-                } else {
-                    AppLog.e("Error releaseInterface()")
+                when {
+                    released -> AppLog.i("OK releaseInterface()")
+                    else -> AppLog.e("Error releaseInterface()")
                 }
             }
+            // close() must be called after releaseInterface(); close() releases all resources
+            // and aborts any in-flight bulkTransfer(), unblocking sendBlocking/recvBlocking.
+            usbDeviceConnection?.close()
             usbDeviceConnection = null
             usbInterface = null
             usbDeviceConnected = null
