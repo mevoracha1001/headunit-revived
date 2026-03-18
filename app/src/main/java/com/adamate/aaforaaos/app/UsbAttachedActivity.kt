@@ -32,14 +32,30 @@ class UsbAttachedActivity : Activity() {
 
         val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
         val devices = usbManager.deviceList.values.toList()
-        return if (devices.size == 1) {
+        if (devices.size == 1) {
             val device = devices[0]
-            AppLog.i("No USB device in intent extras, falling back to single device from deviceList: ${UsbDeviceCompat(device).uniqueName}")
-            device
-        } else {
-            AppLog.e("No USB device in intent extras and ${devices.size} devices in deviceList, cannot determine target")
-            null
+            AppLog.i("No USB device in intent extras, falling back to single device: ${UsbDeviceCompat(device).uniqueName}")
+            return device
         }
+
+        // GM AAOS and some cars don't put the device in intent extras when multiple devices exist.
+        // Use allowed/connecting devices from settings — user has already selected which to use.
+        val settings = Settings(this)
+        val allowed = devices.filter { settings.isConnectingDevice(UsbDeviceCompat(it)) }
+        if (allowed.size == 1) {
+            AppLog.i("No USB in intent, using single allowed device: ${UsbDeviceCompat(allowed[0]).uniqueName}")
+            return allowed[0]
+        }
+
+        // Fallback: use the single non-accessory device (the phone before AOA switch).
+        val nonAccessory = devices.filter { !UsbDeviceCompat.isInAccessoryMode(it) }
+        if (nonAccessory.size == 1) {
+            AppLog.i("No USB in intent, using single non-accessory device: ${UsbDeviceCompat(nonAccessory[0]).uniqueName}")
+            return nonAccessory[0]
+        }
+
+        AppLog.e("No USB device in intent extras and ${devices.size} devices in deviceList, cannot determine target. Allowed=${allowed.size}, nonAccessory=${nonAccessory.size}")
+        return null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
