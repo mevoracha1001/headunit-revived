@@ -88,7 +88,7 @@ class UsbAttachedActivity : Activity() {
         }
 
         val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
-        val usbMode = UsbAccessoryMode(usbManager)
+        val usbMode = UsbAccessoryMode(usbManager, this)
         AppLog.i("Switching USB device to accessory mode " + deviceCompat.uniqueName)
         Toast.makeText(this, getString(R.string.switching_usb_accessory_mode, deviceCompat.uniqueName), Toast.LENGTH_SHORT).show()
         // Run the USB control transfers on a background thread — they block for several

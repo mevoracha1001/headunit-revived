@@ -183,7 +183,7 @@ class UsbListFragment : Fragment() {
                     // Standard connection flow
                     val usbManager = mContext.getSystemService(Context.USB_SERVICE) as UsbManager
                     if (usbManager.hasPermission(device.wrappedDevice)) {
-                        val usbMode = UsbAccessoryMode(usbManager)
+                        val usbMode = UsbAccessoryMode(usbManager, mContext)
                         if (usbMode.connectAndSwitch(device.wrappedDevice)) {
                             Toast.makeText(mContext, R.string.switching_to_android_auto, Toast.LENGTH_SHORT).show()
                         } else {

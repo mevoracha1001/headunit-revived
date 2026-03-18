@@ -1,12 +1,14 @@
 package com.adamate.aaforaaos.view
 
 import android.content.Context
+import android.graphics.PixelFormat
 import android.util.AttributeSet
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.adamate.aaforaaos.App
 import com.adamate.aaforaaos.decoder.VideoDecoder
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 
 class ProjectionView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
@@ -19,6 +21,10 @@ class ProjectionView @JvmOverloads constructor(
 
     init {
         videoDecoder = App.provide(context).videoDecoder
+        // On AAOS (GM cars), explicit format improves MediaCodec compatibility on restricted devices
+        if (AutomotiveUtils.isAutomotiveOs(context)) {
+            holder.setFormat(PixelFormat.OPAQUE)
+        }
         holder.addCallback(this)
     }
 
@@ -33,20 +39,46 @@ class ProjectionView @JvmOverloads constructor(
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        AppLog.i("holder $holder")
-        callbacks.forEach { it.onSurfaceCreated(holder.surface) }
+        AppLog.i("ProjectionView surfaceCreated: $holder")
+        callbacks.forEach { c ->
+            try {
+                c.onSurfaceCreated(holder.surface)
+            } catch (e: Exception) {
+                AppLog.e("ProjectionView surfaceCreated callback error", e)
+            }
+        }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        AppLog.i("holder %s, format: %d, width: %d, height: %d", holder, format, width, height)
-        callbacks.forEach { it.onSurfaceChanged(holder.surface, width, height) }
-        ProjectionViewScaler.updateScale(this, videoWidth, videoHeight)
+        AppLog.i("ProjectionView surfaceChanged: format=$format width=$width height=$height")
+        callbacks.forEach { c ->
+            try {
+                c.onSurfaceChanged(holder.surface, width, height)
+            } catch (e: Exception) {
+                AppLog.e("ProjectionView surfaceChanged callback error", e)
+            }
+        }
+        try {
+            ProjectionViewScaler.updateScale(this, videoWidth, videoHeight)
+        } catch (e: Exception) {
+            AppLog.e("ProjectionView updateScale error", e)
+        }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        AppLog.i("holder $holder")
-        videoDecoder?.stop("surfaceDestroyed")
-        callbacks.forEach { it.onSurfaceDestroyed(holder.surface) }
+        AppLog.i("ProjectionView surfaceDestroyed: $holder")
+        try {
+            videoDecoder?.stop("surfaceDestroyed")
+        } catch (e: Exception) {
+            AppLog.e("ProjectionView stop decoder error", e)
+        }
+        callbacks.forEach { c ->
+            try {
+                c.onSurfaceDestroyed(holder.surface)
+            } catch (e: Exception) {
+                AppLog.e("ProjectionView surfaceDestroyed callback error", e)
+            }
+        }
     }
 
     override fun addCallback(callback: IProjectionView.Callbacks) {

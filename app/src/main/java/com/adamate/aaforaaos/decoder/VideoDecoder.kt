@@ -301,13 +301,16 @@ class VideoDecoder(private val context: Context, private val settings: Settings)
     }
 
     private fun start(mimeType: String, forceSoftware: Boolean, width: Int, height: Int) {
-        val preferHw = !forceSoftware
+        // On AAOS (GM cars): try software first (most reliable), then hardware as fallback.
+        // On other devices: try hardware first, then software.
+        val attemptOrder = if (forceSoftware) listOf(false, true) else listOf(true, false)
         var lastError: Exception? = null
         
-        // Try hardware first (if allowed), then fallback to software — AAOS/restricted devices often fail on HW
-        for (attemptHw in listOf(preferHw, false).distinct()) {
-            if (attemptHw == false && preferHw) {
+        for (attemptHw in attemptOrder) {
+            if (attemptHw == false && !forceSoftware) {
                 AppLog.w("VideoDecoder: Retrying with software decoder after hardware failure")
+            } else if (attemptHw == true && forceSoftware) {
+                AppLog.w("VideoDecoder: Retrying with hardware decoder after software failure (AAOS fallback)")
             }
             try {
                 startTime = System.nanoTime()
@@ -321,9 +324,9 @@ class VideoDecoder(private val context: Context, private val settings: Settings)
                 if (sps != null) format.setByteBuffer("csd-0", ByteBuffer.wrap(sps!!))
                 if (pps != null) format.setByteBuffer("csd-1", ByteBuffer.wrap(pps!!))
                 
-                // Reduced max input size to 1MB (was 10MB). 
-                // 1MB is sufficient for 1080p I-Frames and saves memory on older devices.
-                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1048576)
+                // Reduced max input size. On AAOS (GM cars), use 512KB to reduce memory pressure.
+                val maxInputSize = if (AutomotiveUtils.isAutomotiveOs(context)) 524288 else 1048576
+                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, maxInputSize)
 
                 if (!mSurface!!.isValid) {
                     throw IllegalStateException("Surface is not valid for codec configuration")
@@ -367,11 +370,11 @@ class VideoDecoder(private val context: Context, private val settings: Settings)
                     codec?.release()
                 } catch (_: Exception) {}
                 codec = null
-                if (!attemptHw || !preferHw) break
+                // Continue to next attempt (hw/sw fallback)
             }
         }
-        if (lastError != null) AppLog.e("Failed to start decoder after fallback", lastError!!)
-        else AppLog.e("Failed to start decoder after fallback")
+        lastError?.let { AppLog.e("Failed to start decoder after fallback", it) }
+            ?: AppLog.e("Failed to start decoder after fallback")
         running = false
     }
 

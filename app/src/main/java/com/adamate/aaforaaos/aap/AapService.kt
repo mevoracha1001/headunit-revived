@@ -434,9 +434,10 @@ class AapService : Service(), UsbReceiver.Listener {
                 userExitedAA = true
                 return
             }
-            AppLog.i("AapService: USB disconnect. Scheduling reconnect check in ${USB_RECONNECT_DELAY_MS}ms...")
+            val reconnectDelay = if (AutomotiveUtils.isAutomotiveOs(this)) 5000L else 3000L
+            AppLog.i("AapService: USB disconnect. Scheduling reconnect check in ${reconnectDelay}ms...")
             serviceScope.launch {
-                delay(USB_RECONNECT_DELAY_MS)
+                delay(reconnectDelay)
                 if (!commManager.isConnected) checkAlreadyConnectedUsb(force = true)
             }
         }
@@ -651,9 +652,10 @@ class AapService : Service(), UsbReceiver.Listener {
             // deliver USB_DEVICE_ATTACHED to activities on cold start. As a fallback,
             // check after a delay to give UsbAttachedActivity a chance to handle it first.
             val deviceName = UsbDeviceCompat(device).uniqueName
-            AppLog.i("Normal USB device attached: $deviceName. Will check auto-connect in ${USB_ATTACH_FALLBACK_DELAY_MS}ms...")
+            val fallbackDelay = if (AutomotiveUtils.isAutomotiveOs(this)) 3500L else 2000L
+            AppLog.i("Normal USB device attached: $deviceName. Will check auto-connect in ${fallbackDelay}ms...")
             serviceScope.launch {
-                delay(USB_ATTACH_FALLBACK_DELAY_MS)
+                delay(fallbackDelay)
                 if (!commManager.isConnected && !isSwitchingToAccessory.get()) {
                     AppLog.i("UsbAttachedActivity didn't handle $deviceName. Trying from service...")
                     checkAlreadyConnectedUsb(force = true)
@@ -687,7 +689,7 @@ class AapService : Service(), UsbReceiver.Listener {
             } else {
                 isSwitchingToAccessory.set(true)
                 val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
-                val usbMode = UsbAccessoryMode(usbManager)
+                val usbMode = UsbAccessoryMode(usbManager, this)
                 serviceScope.launch(Dispatchers.IO) {
                     try {
                         if (usbMode.connectAndSwitch(device)) {
@@ -740,7 +742,7 @@ class AapService : Service(), UsbReceiver.Listener {
         if (accessoryHandshakeFailures > MAX_STALE_ACCESSORY_RETRIES) {
             AppLog.i("Stale accessory detected: forcing re-enumeration via AOA descriptors for $deviceName")
             accessoryHandshakeFailures = 0
-            val usbMode = UsbAccessoryMode(usbManager)
+            val usbMode = UsbAccessoryMode(usbManager, this)
             isSwitchingToAccessory.set(true)
             serviceScope.launch(Dispatchers.IO) {
                 try {
@@ -812,7 +814,7 @@ class AapService : Service(), UsbReceiver.Listener {
                     if (usbManager.hasPermission(device)) {
                         AppLog.i("Found known USB device with permission: ${deviceCompat.uniqueName}. Switching to accessory mode.")
                         isSwitchingToAccessory.set(true)
-                        val usbMode = UsbAccessoryMode(usbManager)
+                        val usbMode = UsbAccessoryMode(usbManager, this)
                         serviceScope.launch(Dispatchers.IO) {
                             try {
                                 if (usbMode.connectAndSwitch(device)) {
@@ -862,7 +864,7 @@ class AapService : Service(), UsbReceiver.Listener {
             val deviceName = UsbDeviceCompat(device).uniqueName
             AppLog.i("Single USB auto-connect: connecting to $deviceName")
             isSwitchingToAccessory.set(true)
-            val usbMode = UsbAccessoryMode(usbManager)
+            val usbMode = UsbAccessoryMode(usbManager, this)
             serviceScope.launch(Dispatchers.IO) {
                 try {
                     if (usbMode.connectAndSwitch(device)) {
@@ -885,18 +887,20 @@ class AapService : Service(), UsbReceiver.Listener {
     // -------------------------------------------------------------------------
 
     /**
-     * Attempts a USB connection up to [maxRetries] times with a 1.5 s delay between attempts.
+     * Attempts a USB connection up to [maxRetries] times with a delay between attempts.
      *
      * USB accessories occasionally fail on the first attach (the device hasn't fully
      * enumerated yet), so retrying is necessary for reliability.
+     * On AAOS (GM cars), USB is slower — use more retries and longer delays.
      */
-    private suspend fun connectUsbWithRetry(device: UsbDevice, maxRetries: Int = 3) {
+    private suspend fun connectUsbWithRetry(device: UsbDevice, maxRetries: Int = if (AutomotiveUtils.isAutomotiveOs(this)) 5 else 3) {
+        val retryDelayMs = if (AutomotiveUtils.isAutomotiveOs(this)) 2500L else 1500L
         var retryCount = 0
         var success = false
         while (retryCount <= maxRetries && !success) {
             if (retryCount > 0) {
                 AppLog.i("Retrying USB connection (attempt ${retryCount + 1}/$maxRetries)...")
-                delay(1500)
+                delay(retryDelayMs)
                 // A USB reattach during the delay could have already started a new connection;
                 // bail out to avoid two parallel retry loops competing on the same device.
                 if (commManager.isConnected ||
@@ -1263,12 +1267,5 @@ class AapService : Service(), UsbReceiver.Listener {
 
         /** Max handshake failures on a stale accessory device before forcing AOA re-enumeration. */
         private const val MAX_STALE_ACCESSORY_RETRIES = 1
-
-        /** Delay before retrying USB connection after an unexpected disconnect. */
-        private const val USB_RECONNECT_DELAY_MS = 3000L
-
-        /** Delay before AapService tries to handle a normal-mode USB attach as a fallback
-         *  when UsbAttachedActivity doesn't fire (common on Chinese MediaTek headunits). */
-        private const val USB_ATTACH_FALLBACK_DELAY_MS = 2000L
     }
 }

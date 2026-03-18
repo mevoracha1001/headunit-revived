@@ -1,5 +1,6 @@
 package com.adamate.aaforaaos.connection
 
+import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
@@ -9,10 +10,17 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.SystemClock
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device: UsbDevice) : AccessoryConnection {
+class UsbAccessoryConnection(
+    private val usbMgr: UsbManager,
+    private val device: UsbDevice,
+    private val context: Context? = null
+) : AccessoryConnection {
+
+    private val isAaos: Boolean get() = context?.let { AutomotiveUtils.isAutomotiveOs(it) } ?: false
     // @Volatile so isConnected / isDeviceRunning see the latest value without a lock.
     @Volatile private var usbDeviceConnected: UsbDeviceCompat? = null
     @Volatile private var usbDeviceConnection: UsbDeviceConnection? = null
@@ -72,17 +80,19 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
         var connection: UsbDeviceConnection? = null
         var lastError: Throwable? = null
 
-        // Car USB ports can be slow to enumerate; retry with increasing delay
-        for (i in 0 until 5) {
+        // Car USB ports can be slow to enumerate; retry with increasing delay.
+        // On AAOS (GM cars), use more retries and longer delays.
+        val maxAttempts = if (isAaos) 7 else 5
+        for (i in 0 until maxAttempts) {
             try {
                 connection = usbMgr.openDevice(device)
                 if (connection != null) break
             } catch (t: Throwable) {
                 lastError = t
-                AppLog.w("Attempt ${i+1}/5 to openDevice failed: ${t.message}")
+                AppLog.w("Attempt ${i+1}/$maxAttempts to openDevice failed: ${t.message}")
             }
-            if (i < 4) {
-                val delayMs = 300L + (i * 400L) // 300, 700, 1100, 1500 ms
+            if (i < maxAttempts - 1) {
+                val delayMs = if (isAaos) 400L + (i * 500L) else 300L + (i * 400L)
                 try { Thread.sleep(delayMs) } catch (_: Exception) {}
             }
         }

@@ -1,13 +1,17 @@
 package com.adamate.aaforaaos.connection
 
+import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import com.adamate.aaforaaos.aap.Utils
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 
-class UsbAccessoryMode(private val usbMgr: UsbManager) {
+class UsbAccessoryMode(private val usbMgr: UsbManager, private val context: Context? = null) {
+
+    private val isAaos: Boolean get() = context?.let { AutomotiveUtils.isAutomotiveOs(it) } ?: false
 
     fun connectAndSwitch(device: UsbDevice): Boolean {
         var connection: UsbDeviceConnection? = null
@@ -41,7 +45,7 @@ class UsbAccessoryMode(private val usbMgr: UsbManager) {
     private fun switch(connection: UsbDeviceConnection): Boolean {
         // Do accessory negotiation and attempt to switch to accessory mode. Called only by usb_connect()
         val buffer = ByteArray(2)
-        var len = connection.controlTransfer(UsbConstants.USB_DIR_IN or UsbConstants.USB_TYPE_VENDOR, ACC_REQ_GET_PROTOCOL, 0, 0, buffer, 2, USB_TIMEOUT_IN_MS)
+        var len = connection.controlTransfer(UsbConstants.USB_DIR_IN or UsbConstants.USB_TYPE_VENDOR, ACC_REQ_GET_PROTOCOL, 0, 0, buffer, 2, usbTimeoutMs)
         if (len != 2) {
             AppLog.e("Error controlTransfer len: $len")
             return false
@@ -70,18 +74,19 @@ class UsbAccessoryMode(private val usbMgr: UsbManager) {
 
         AppLog.i("Sending acc start")
         // Send accessory start request. Device should re-enumerate as an accessory.
-        len = connection.controlTransfer(UsbConstants.USB_TYPE_VENDOR, ACC_REQ_START, 0, 0, byteArrayOf(), 0, USB_TIMEOUT_IN_MS)
+        len = connection.controlTransfer(UsbConstants.USB_TYPE_VENDOR, ACC_REQ_START, 0, 0, byteArrayOf(), 0, usbTimeoutMs)
 
         // len == 0: clean ACK before re-enumeration (expected path).
         // len < 0: phone disconnected before the ACK because it started re-enumerating
         //          immediately upon receipt — the command was still received. Treat as success.
         AppLog.i("Acc start sent (len=$len). Waiting for re-enumeration...")
-        try { Thread.sleep(500) } catch (e: Exception) {}
+        val reenumDelayMs = if (isAaos) 800 else 500
+        try { Thread.sleep(reenumDelayMs.toLong()) } catch (e: Exception) {}
         return true
     }
 
     private fun initStringControlTransfer(conn: UsbDeviceConnection, index: Int, string: String): Boolean {
-        val len = conn.controlTransfer(UsbConstants.USB_TYPE_VENDOR, ACC_REQ_SEND_STRING, 0, index, string.toByteArray(), string.length, USB_TIMEOUT_IN_MS)
+        val len = conn.controlTransfer(UsbConstants.USB_TYPE_VENDOR, ACC_REQ_SEND_STRING, 0, index, string.toByteArray(), string.length, usbTimeoutMs)
         return if (len < 0) {
             // Negative means the USB transfer itself failed (e.g. device disconnected or
             // timed out). Abort the switch — ACC_REQ_START would be pointless.
@@ -100,9 +105,9 @@ class UsbAccessoryMode(private val usbMgr: UsbManager) {
         }
     }
 
+    private val usbTimeoutMs: Int get() = if (isAaos) 900 else 500
+
     companion object {
-        // Car USB needs longer timeout for control transfers
-        private const val USB_TIMEOUT_IN_MS = 500
         private const val MANUFACTURER = "Android"
         private const val MODEL = "Android Auto"
         private const val DESCRIPTION = "Android Auto"//"Android Open Automotive Protocol"

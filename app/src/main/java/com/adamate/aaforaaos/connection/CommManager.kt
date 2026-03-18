@@ -176,7 +176,7 @@ class CommManager(
         try {
             _connectionState.emit(ConnectionState.Connecting)
             _connection?.disconnect()
-            _connection = UsbAccessoryConnection(usbManager, device)
+            _connection = UsbAccessoryConnection(usbManager, device, context)
 
             if (_connection?.connect() ?: false) {
                 settings.saveLastConnection(type = Settings.CONNECTION_TYPE_USB, usbDevice = UsbDeviceCompat.getUniqueName(device))

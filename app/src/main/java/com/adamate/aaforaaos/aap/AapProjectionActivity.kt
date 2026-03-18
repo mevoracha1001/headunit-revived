@@ -57,8 +57,10 @@ class AapProjectionActivity : SurfaceActivity(), IProjectionView.Callbacks, Vide
     private var latencyGapRunnable: Runnable? = null
     private var pendingDisconnectRunnable: Runnable? = null
 
-    /** Grace period (ms) before finishing when Disconnected during startup. Gives USB reconnect time to succeed. */
-    private val disconnectGracePeriodMs = 3500L
+    /** Grace period (ms) before finishing when Disconnected during startup. Gives USB reconnect time to succeed.
+     *  On AAOS (GM cars), USB is slower — use longer grace period. */
+    private val disconnectGracePeriodMs: Long
+        get() = if (HeadUnitScreenConfig.isAaos) 7000L else 3500L
 
     private val videoWatchdogRunnable = object : Runnable {
         override fun run() {

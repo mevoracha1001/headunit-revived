@@ -120,15 +120,22 @@ object HeadUnitScreenConfig {
         val selectedResolution = Settings.Resolution.fromId(currentSettings.resolutionId)
 
         // Determine negotiatedResolutionType based on physical pixels if AUTO was selected
-        // On AAOS (GM cars, etc.), cap at 720p for compatibility with restricted Android Auto
+        // On AAOS (GM cars, etc.), use conservative resolution for restricted Android Auto.
+        // Small screens (<=800x480) use 480p to reduce decoder load; otherwise 720p.
         if (selectedResolution == Settings.Resolution.AUTO) {
             if (isAaos) {
-                negotiatedResolutionType = if (screenHeightPx > screenWidthPx) {
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._720x1280
-                } else {
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720
+                negotiatedResolutionType = when {
+                    screenWidthPx <= 800 && screenHeightPx <= 480 -> {
+                        Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480
+                    }
+                    screenHeightPx > screenWidthPx -> {
+                        Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._720x1280
+                    }
+                    else -> {
+                        Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720
+                    }
                 }
-                AppLog.i("HeadUnitScreenConfig: AAOS — capping at 720p for compatibility")
+                AppLog.i("HeadUnitScreenConfig: AAOS — using ${negotiatedResolutionType} for GM/restricted compatibility")
             } else if (screenHeightPx > screenWidthPx) { // Portrait mode
                 if (screenWidthPx > 720 || screenHeightPx > 1280) {
                     negotiatedResolutionType = Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1080x1920
@@ -147,12 +154,15 @@ object HeadUnitScreenConfig {
                 }
             }
         } else {
-            // Manual selection: Adapt to orientation. On AAOS, cap at 720p.
+            // Manual selection: Adapt to orientation. On AAOS, use 480p for small screens else 720p.
             if (isAaos) {
-                negotiatedResolutionType = if (screenHeightPx > screenWidthPx) {
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._720x1280
-                } else {
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720
+                negotiatedResolutionType = when {
+                    screenWidthPx <= 800 && screenHeightPx <= 480 ->
+                        Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480
+                    screenHeightPx > screenWidthPx ->
+                        Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._720x1280
+                    else ->
+                        Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720
                 }
             } else if (screenHeightPx > screenWidthPx) { // Portrait
                 negotiatedResolutionType = when (selectedResolution) {

@@ -27,6 +27,7 @@ import com.adamate.aaforaaos.decoder.VideoDecoder
 import com.adamate.aaforaaos.main.BackgroundNotification
 import com.adamate.aaforaaos.ssl.SingleKeyKeyManager
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 import com.adamate.aaforaaos.utils.Settings
 import com.adamate.aaforaaos.aap.AapService
 import com.adamate.aaforaaos.aap.protocol.proto.Control
@@ -253,8 +254,8 @@ class AapTransport(
 
     private fun handshake(connection: AccessoryConnection): Boolean {
         try {
-            // Increased delay for AA 16.4+ stability
-            SystemClock.sleep(500)
+            // Increased delay for AA 16.4+ stability. On AAOS (GM cars), USB is slower.
+            SystemClock.sleep(if (AutomotiveUtils.isAutomotiveOs(context)) 800 else 500)
             val buffer = ByteArray(Messages.DEF_BUFFER_LENGTH)
 
             // Drain any stale data left in the USB pipe from a previous session
@@ -278,7 +279,7 @@ class AapTransport(
             // Outer deadline prevents the loop from running for minutes on an unresponsive device.
             // Each send+recv pair uses 2 s per operation; 3 attempts × 4 s ≈ 12 s worst-case,
             // capped here at HANDSHAKE_TIMEOUT_MS so a stuck device fails fast.
-            val versionDeadline = SystemClock.elapsedRealtime() + HANDSHAKE_TIMEOUT_MS
+            val versionDeadline = SystemClock.elapsedRealtime() + handshakeTimeoutMs
             while (attempt < 3 && connection.isConnected) {
                 if (SystemClock.elapsedRealtime() >= versionDeadline) {
                     AppLog.e("Handshake: Version exchange timed out after $attempt attempt(s).")
@@ -450,8 +451,8 @@ class AapTransport(
     companion object {
         private const val MSG_POLL = 1
         private const val MSG_SEND = 2
-        // Maximum wall-clock time allowed for the version-exchange phase of the AAP handshake.
-        // Prevents the retry loop from blocking for minutes on an unresponsive USB device.
-        private const val HANDSHAKE_TIMEOUT_MS = 10_000L
     }
+
+    // AAOS (GM cars): longer timeout — USB can be slower on restricted car systems
+    private val handshakeTimeoutMs: Long get() = if (AutomotiveUtils.isAutomotiveOs(context)) 15_000L else 10_000L
 }
