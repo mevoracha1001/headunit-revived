@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import java.io.DataInputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -121,7 +122,13 @@ class SocketAccessoryConnection(private val ip: String, private val port: Int, p
             output = transport.getOutputStream().buffered(65536)
             return@withContext true
         } catch (e: IOException) {
-            AppLog.e(e)
+            // Connection refused is common (gateway .1, phone not running Headunit Server, etc).
+            // Use warning to avoid scary notification; user may be in Helper Mode (phone connects to car).
+            if (e is ConnectException || (e.message?.contains("ECONNREFUSED", ignoreCase = true) == true)) {
+                AppLog.w("Connection to $ip:$port failed: ${e.message}")
+            } else {
+                AppLog.e(e)
+            }
             return@withContext false
         }
     }
