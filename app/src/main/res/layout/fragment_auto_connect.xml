@@ -1,27 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Bottom sheet layout: content flows top-to-bottom, but sheet slides up from screen bottom.
+     Toolbar/actions at bottom so they stay reachable on car screens with blocked top areas. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="?android:attr/colorBackground">
+    android:background="?android:attr/colorBackground"
+    android:paddingBottom="24dp">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:elevation="0dp"
-        android:background="?android:attr/colorBackground">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:title="@string/auto_connect_settings"
-            app:navigationIcon="@drawable/ic_arrow_back_white"
-            app:titleTextColor="?android:attr/textColorPrimary"
-            app:navigationIconTint="?android:attr/textColorPrimary" />
-
-    </com.google.android.material.appbar.AppBarLayout>
+        android:layout_height="?attr/actionBarSize"
+        app:title="@string/auto_connect_settings"
+        app:navigationIcon="@drawable/ic_arrow_back_white"
+        app:titleTextColor="?android:attr/textColorPrimary"
+        app:navigationIconTint="?android:attr/textColorPrimary" />
 
     <TextView
         android:id="@+id/help_banner"
@@ -29,8 +24,8 @@
         android:layout_height="wrap_content"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="4dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
         android:text="@string/auto_connect_help"
         android:textColor="?android:attr/textColorSecondary"
         android:textSize="13sp" />
@@ -45,4 +40,29 @@
         android:scrollbars="vertical"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
+    <!-- Bottom bar: actions stay reachable on car screens with curved/blocked top -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end|center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:background="?android:attr/colorBackground">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/save_button_widget"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:text="@string/save"
+            android:enabled="false"
+            android:textColor="@color/btn_save_text"
+            app:cornerRadius="20dp"
+            app:backgroundTint="@color/btn_save_background" />
+    </LinearLayout>
 </LinearLayout>

@@ -2,14 +2,11 @@ package com.adamate.aaforaaos.main
 
 import android.app.AlertDialog
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.fragment.app.Fragment
-import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -20,9 +17,16 @@ import com.adamate.aaforaaos.main.settings.AutoConnectMethod
 import com.adamate.aaforaaos.main.settings.AutoConnectTouchCallback
 import com.adamate.aaforaaos.utils.Settings
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.button.MaterialButton
 
-class AutoConnectFragment : Fragment() {
+/**
+ * Auto-Connect settings as a bottom sheet. Slides up from the bottom of the screen so options
+ * stay reachable on car infotainment with curved edges or blocked top areas.
+ */
+class AutoConnectFragment : BottomSheetDialogFragment() {
 
     private lateinit var settings: Settings
     private lateinit var toolbar: MaterialToolbar
@@ -74,6 +78,16 @@ class AutoConnectFragment : Fragment() {
 
         setupToolbar()
 
+        // Expand sheet from bottom so options stay reachable on car screens with blocked top
+        (dialog as? BottomSheetDialog)?.setOnShowListener { d ->
+            val sheet = (d as BottomSheetDialog).findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            sheet?.let {
+                val behavior = BottomSheetBehavior.from(it)
+                behavior.state = BottomSheetBehavior.STATE_EXPANDED
+                behavior.skipCollapsed = true
+            }
+        }
+
         // Intercept system back button
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -96,18 +110,7 @@ class AutoConnectFragment : Fragment() {
             handleBackPress()
         }
 
-        val actionView = LayoutInflater.from(requireContext()).inflate(R.layout.layout_save_button, toolbar, false)
-        val margin = resources.getDimensionPixelSize(R.dimen.default_horizontal_margin)
-        val lp = androidx.appcompat.widget.Toolbar.LayoutParams(
-            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
-            androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            setMargins(margin, 0, 0, 0)
-        }
-        toolbar.addView(actionView, 1, lp)
-
-        saveButton = actionView.findViewById(R.id.save_button_widget)
+        saveButton = view?.findViewById(R.id.save_button_widget)
         saveButton?.setOnClickListener {
             saveSettings()
         }
@@ -131,14 +134,7 @@ class AutoConnectFragment : Fragment() {
     }
 
     private fun navigateBack() {
-        try {
-            val navController = findNavController()
-            if (!navController.navigateUp()) {
-                requireActivity().finish()
-            }
-        } catch (e: Exception) {
-            requireActivity().finish()
-        }
+        dismiss()
     }
 
     private fun checkChanges() {

@@ -478,7 +478,7 @@ class SettingsFragment : Fragment() {
             value = getAutoConnectSummary(),
             onClick = {
                 try {
-                    findNavController().navigate(R.id.action_settingsFragment_to_autoConnectFragment)
+                    AutoConnectFragment().show(parentFragmentManager, "AutoConnectBottomSheet")
                 } catch (e: Exception) {
                     // Failover
                 }
