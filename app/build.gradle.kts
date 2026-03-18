@@ -97,8 +97,8 @@ android {
         applicationId = "com.adamate.aaforaaos"
         minSdk = 21  // Required by Play Store; app supports Android 5.0+
         targetSdk = 36
-        versionCode = 54
-        versionName = "2.0.4"
+        versionCode = 55
+        versionName = "2.0.5"
         setProperty("archivesBaseName", "${applicationId}_${versionName}")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
