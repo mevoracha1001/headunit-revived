@@ -1,16 +1,19 @@
 package com.adamate.aaforaaos.aap
 
+import android.content.Context
 import com.adamate.aaforaaos.aap.protocol.Channel
 import com.adamate.aaforaaos.aap.protocol.messages.Messages
 import com.adamate.aaforaaos.connection.AccessoryConnection
 import com.adamate.aaforaaos.utils.AppLog
+import com.adamate.aaforaaos.utils.AutomotiveUtils
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 
 internal class AapReadMultipleMessages(
         connection: AccessoryConnection,
         ssl: AapSsl,
-        handler: AapMessageHandler)
+        handler: AapMessageHandler,
+        private val context: Context)
     : AapRead.Base(connection, ssl, handler) {
 
     private val fifo = ByteBuffer.allocate(Messages.DEF_BUFFER_LENGTH * 4) // Increased buffer size
@@ -19,9 +22,12 @@ internal class AapReadMultipleMessages(
     private val msgBuffer = ByteArray(65535) // unsigned short max
     private val skipBuffer = ByteArray(4)
 
+    // Car USB (AAOS) has higher latency; use longer read timeout to avoid spurious disconnects
+    private val readTimeoutMs: Int get() = if (AutomotiveUtils.isAutomotiveOs(context)) 400 else 150
+
     override fun doRead(connection: AccessoryConnection): Int {
         val size = try {
-            connection.recvBlocking(recvBuffer, recvBuffer.size, 150, false)
+            connection.recvBlocking(recvBuffer, recvBuffer.size, readTimeoutMs, false)
         } catch (e: Exception) {
             AppLog.e("AapRead: Fatal USB read error: ${e.message}")
             return -1

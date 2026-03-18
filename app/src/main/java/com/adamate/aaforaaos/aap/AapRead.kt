@@ -34,7 +34,7 @@ internal interface AapRead {
             return if (connection.isSingleMessage)
                 AapReadSingleMessage(connection, transport.ssl, handler)
             else
-                AapReadMultipleMessages(connection, transport.ssl, handler)
+                AapReadMultipleMessages(connection, transport.ssl, handler, context)
         }
     }
 }

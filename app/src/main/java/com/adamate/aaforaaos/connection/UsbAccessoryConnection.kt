@@ -240,7 +240,9 @@ class UsbAccessoryConnection(
     // Read error tracking — only accessed by the poll thread; no lock needed.
     private var consecutiveReadErrors = 0
     private var firstErrorTimeMs = 0L
-    private val maxErrorDurationBeforeDisconnect = 60_000L  // 60s patience for dongle WiFi recovery
+    // AAOS/car USB: longer patience for dongle WiFi recovery and slower enumeration
+    private val maxErrorDurationBeforeDisconnect = if (isAaos) 90_000L else 60_000L
+    private val errorsBeforeReset = if (isAaos) 5 else 3  // Less aggressive reset on car USB
 
     // Volatile reads capture the latest connection/endpoint references; bulkTransfer runs
     // entirely outside any lock. If disconnect() calls close() concurrently, bulkTransfer
@@ -276,12 +278,20 @@ class UsbAccessoryConnection(
                     continue
                 }
 
-                // 2. Internal buffer empty, read new 16KB chunk from USB
-                val read = try {
-                    connection.bulkTransfer(ep, internalBuffer, internalBuffer.size, timeout)
-                } catch (e: Exception) {
-                    AppLog.e("USB Read Error: ${e.message}")
-                    -1
+                // 2. Internal buffer empty, read from USB. Retry transient -1 (timeout) up to 2x
+                // before counting as error — car USB can have brief stalls.
+                var read = -1
+                for (attempt in 0..2) {
+                    read = try {
+                        connection.bulkTransfer(ep, internalBuffer, internalBuffer.size, timeout)
+                    } catch (e: Exception) {
+                        AppLog.e("USB Read Error: ${e.message}")
+                        -1
+                    }
+                    if (read >= 0) break
+                    if (attempt < 2) {
+                        try { Thread.sleep(30) } catch (_: InterruptedException) {}
+                    }
                 }
 
                 if (read < 0) {
@@ -298,12 +308,12 @@ class UsbAccessoryConnection(
                     if (consecutiveReadErrors % 10 == 0) {
                         AppLog.w("USB read errors ($consecutiveReadErrors) for ${errorDurationMs / 1000}s — waiting for recovery...")
                     }
-                    // After 3 consecutive errors, try interface reset — recovers from USB stalls
-                    if (consecutiveReadErrors == 3) {
-                        AppLog.i("USB: attempting interface reset after 3 read errors")
+                    // After N consecutive errors, try interface reset — recovers from USB stalls
+                    if (consecutiveReadErrors == errorsBeforeReset) {
+                        AppLog.i("USB: attempting interface reset after $errorsBeforeReset read errors")
                         resetInterface()
                         try { Thread.sleep(100) } catch (_: InterruptedException) {}
-                    } else if (consecutiveReadErrors >= 5) {
+                    } else if (consecutiveReadErrors >= errorsBeforeReset + 2) {
                         try { Thread.sleep(200) } catch (_: InterruptedException) {}
                     }
                     return if (totalReturned > 0) totalReturned else -1
